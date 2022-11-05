@@ -6,6 +6,7 @@ plugins {
 
 group("net.auoeke")
 version("0.0.0")
+description("a library to facilitate signaling and handling exceptional conditions")
 javaVersion(17)
 
 repositories {
@@ -28,4 +29,31 @@ test {
 
 java {
 	withJavadocJar()
+}
+
+publishing {
+	publications.withType(MavenPublication) {
+		pom {
+			url.set("https://github.com/auoeke/result")
+
+			licenses {
+				license {
+					url.set("https://raw.githubusercontent.com/auoeke/gronk/master/LICENSE")
+				}
+			}
+
+			developers {
+				developer {
+					id.set("auoeke")
+					email.set("me@auoeke.net")
+				}
+			}
+
+			scm {
+				connection.set("scm:git:git://github.com/auoeke/result.git")
+				developerConnection.set("scm:git:git://github.com/auoeke/result.git")
+				url.set("https://github.com/auoeke/result/tree/master")
+			}
+		}
+	}
 }
