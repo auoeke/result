@@ -32,6 +32,13 @@ java {
 }
 
 publishing {
+	repositories {
+		maven(findProperty("maven.repository")) {
+			username(findProperty("maven.username"))
+			password(findProperty("maven.password"))
+		}
+	}
+
 	publications.withType(MavenPublication) {
 		pom {
 			url.set("https://github.com/auoeke/result")
