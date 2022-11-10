@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -16,21 +15,23 @@ import java.util.function.Supplier;
  <p>
  A success contains a {@link #value} of type {@code V?};
  which can also be queried by the methods {@link #valueOr}, {@link #valueOrNull} and {@link #valueOrGet}.
+ <br>A success with value {@code V} may be denoted by {@code Success(V)}.
  <p>
- A failure can contain an exception that is known as its {@link #cause} and 1 or more {@link #suppress suppressed} exceptions;
+ A failure can contain an exception that is known as its {@link #cause} and 1 or more {@link #multiplySuppressed suppressed} exceptions;
  but it may be empty. The method {@link #exception} can be used in order to get an exception describing
  the reason for failure and is thrown by {@link Failure#value}.
+ <br>A failure with cause {@code C} may be denoted by {@code Failure(C)}.
 
  @param <V> the type of the successful result of the computation
  @since 0.0.0
  */
 public sealed interface Result<V> {
 	/**
-	 Returns a {@link Success} containing {@code value}.
+	 Returns a {@code Success(value)}.
 
 	 @param value the value of the success; which may be {@code null}
 	 @param <V> the type of {@code value}
-	 @return a {@link Success} containing {@code value}
+	 @return a {@code Success(value)}
 	 @since 0.0.0
 	 */
 	static <V> Success<V> success(V value) {
@@ -38,11 +39,11 @@ public sealed interface Result<V> {
 	}
 
 	/**
-	 Returns a {@link Failure} containing {@code cause}.
+	 Returns a {@code Failure(cause)}.
 
 	 @param cause the exception of the failure; which may be {@code null}
 	 @param <V> the type of the value
-	 @return a {@link Failure} containing {@code cause}
+	 @return a {@code Failure(cause)}
 	 @since 0.0.0
 	 */
 	static <V> Failure<V> failure(Throwable cause) {
@@ -63,6 +64,20 @@ public sealed interface Result<V> {
 		} catch (Throwable cause) {
 			return new Failure<>(cause, null);
 		}
+	}
+
+	/**
+	 Returns a {@link Result} equivalent to {@code optional}.
+	 If it has a value, then the result is a {@code Success(optional.get())};
+	 otherwise the result is a {@code Failure(null)}.
+
+	 @param optional an optional
+	 @param <V> the type of the value
+	 @return a result equivalent to {@code optional}
+	 @since 0.1.0
+	 */
+	static <V> Result<V> of(Optional<V> optional) {
+		return optional.isPresent() ? new Success<>(optional.get()) : new Failure<>(null, null);
 	}
 
 	/**
@@ -126,7 +141,7 @@ public sealed interface Result<V> {
 	 or {@link Optional#empty} if this result is a {@link Success}.
 	 <p>
 	 The cause of the exception is the {@link #cause} of the failure.
-	 If the failure does not have a cause and has {@link #suppress suppressed} exceptions,
+	 If the failure does not have a cause and has {@link #multiplySuppressed suppressed} exceptions,
 	 then they are added to the root exception returned by this method as suppressed exceptions.
 
 	 @return an {@link Optional} that contains—if this result is a failure—a new exception possibly with detail
@@ -189,7 +204,7 @@ public sealed interface Result<V> {
 	 @return {@code this} if this result is a success or else the result of {@code alternative.get()}
 	 @since 0.0.0
 	 */
-	Result<V> or(ThrowingSupplier<V> alternative);
+	Result<V> or(ThrowingSupplier<? extends V> alternative);
 
 	/**
 	 Returns {@code this} if this result {@link #isSuccess is a success} or else the value of {@code alternative.get()}.
@@ -201,6 +216,12 @@ public sealed interface Result<V> {
 	 */
 	Result<V> flatOr(Supplier<? extends Result<? extends V>> alternative);
 
+	Result<V> and(ThrowingConsumer<? super V> action);
+
+	Result<V> multiply(ThrowingRunnable action);
+
+	Result<V> multiplySuppressed(ThrowingRunnable action);
+
 	/**
 	 Returns the {@link Result} of {@code supplier.get()}.
 	 If this result is a {@link Failure}, it has a {@link #cause} and the new result is a failure,
@@ -210,18 +231,22 @@ public sealed interface Result<V> {
 	 @return the supplier's {@link Result}
 	 @since 0.0.0
 	 */
-	<W> Result<W> replace(ThrowingSupplier<? extends W> supplier);
+	<W> Result<W> thenResult(ThrowingSupplier<? extends W> supplier);
 
 	/**
-	 Returns {@code result}.
-	 If this result is a {@link Failure}, it has a {@link #cause} and {@code result} is a failure,
-	 then this result's cause is added to {@code result} as a suppressed exception.
+	 Returns {@code result} if it or this result is a {@link Success}.
+	 Otherwise, this result's exceptions are merged with {@code result}'s
+	 exceptions in a {@link Failure} which is returned.
+	 <p>
+	 If the new failure has a cause, then this failure's cause is
+	 {@link Throwable#addSuppressed suppressed}; otherwise the returned failure
+	 derives it from this failure.
 
 	 @param result a {@link Result} that is to replace this result
 	 @return {@code result}
 	 @since 0.0.0
 	 */
-	<R extends Result<?>> R flatReplace(R result);
+	<R extends Result<?>> R then(R result);
 
 	/**
 	 Returns {@code supplier.get()}.
@@ -232,7 +257,7 @@ public sealed interface Result<V> {
 	 @return {@code supplier.get()}
 	 @since 0.0.0
 	 */
-	<R extends Result<?>> R supply(Supplier<? extends R> supplier);
+	<R extends Result<?>> R thenSupply(Supplier<? extends R> supplier);
 
 	<W> Result<W> map(ThrowingFunction<V, W> mapper);
 
@@ -240,19 +265,13 @@ public sealed interface Result<V> {
 
 	Result<V> filter(Predicate<V> predicate);
 
-	Result<V> and(ThrowingRunnable action);
+	Result<V> ifFailure(ThrowingConsumer<? super Throwable> action);
 
-	Result<V> suppress(ThrowingRunnable action);
+	<E extends Throwable> Result<V> ifFailure(Class<E> type, ThrowingConsumer<? super E> action);
 
-	Result<V> ifSuccess(Consumer<? super V> action);
+	Result<V> handle(ThrowingConsumer<? super Throwable> handler);
 
-	Result<V> ifFailure(Consumer<Throwable> action);
-
-	<E extends Throwable> Result<V> ifFailure(Class<E> type, Consumer<? super E> action);
-
-	Result<V> handle(Consumer<Throwable> handler);
-
-	<E extends Throwable> Result<V> handle(Class<E> type, Consumer<? super E> handler);
+	<E extends Throwable> Result<V> handle(Class<E> type, ThrowingConsumer<? super E> handler);
 
 	/**
 	 Returns a new shallow copy of this result.
@@ -260,6 +279,10 @@ public sealed interface Result<V> {
 	 @return a new shallow copy of this result
 	 */
 	Result<V> clone();
+
+	private static <T> T cast(Object object) {
+		return (T) object;
+	}
 
 	/**
 	 A successful result containing a {@code value}.
@@ -281,7 +304,7 @@ public sealed interface Result<V> {
 			return this.value;
 		}
 
-		@Override public Success<V> or(ThrowingSupplier<V> alternative) {
+		@Override public Success<V> or(ThrowingSupplier<? extends V> alternative) {
 			return this;
 		}
 
@@ -305,13 +328,8 @@ public sealed interface Result<V> {
 			throw new ClassCastException("Success -> Failure");
 		}
 
-		@Override public Result<V> and(ThrowingRunnable action) {
-			try {
-				action.run();
-				return this;
-			} catch (Throwable cause) {
-				return new Failure<>(cause, null);
-			}
+		@Override public Result<V> multiply(ThrowingRunnable action) {
+			return this.and(v -> action.run());
 		}
 
 		@Override public <W> Result<W> map(ThrowingFunction<V, W> mapper) {
@@ -326,7 +344,7 @@ public sealed interface Result<V> {
 			return predicate.test(this.value) ? this : new Failure<>(null, null);
 		}
 
-		@Override public Result<V> suppress(ThrowingRunnable action) {
+		@Override public Result<V> multiplySuppressed(ThrowingRunnable action) {
 			try {
 				action.run();
 				return this;
@@ -335,36 +353,40 @@ public sealed interface Result<V> {
 			}
 		}
 
-		@Override public <W> Result<W> replace(ThrowingSupplier<? extends W> supplier) {
+		@Override public <W> Result<W> thenResult(ThrowingSupplier<? extends W> supplier) {
 			return of(supplier);
 		}
 
-		@Override public <R extends Result<?>> R flatReplace(R result) {
+		@Override public <R extends Result<?>> R then(R result) {
 			return result;
 		}
 
-		@Override public <R extends Result<?>> R supply(Supplier<? extends R> supplier) {
+		@Override public <R extends Result<?>> R thenSupply(Supplier<? extends R> supplier) {
 			return supplier.get();
 		}
 
-		@Override public Success<V> ifSuccess(Consumer<? super V> action) {
-			action.accept(this.value());
+		@Override public Result<V> and(ThrowingConsumer<? super V> action) {
+			try {
+				action.accept(this.value());
+				return this;
+			} catch (Throwable trouble) {
+				return new Failure<>(trouble, null);
+			}
+		}
+
+		@Override public Success<V> ifFailure(ThrowingConsumer<? super Throwable> action) {
 			return this;
 		}
 
-		@Override public Success<V> ifFailure(Consumer<Throwable> action) {
+		@Override public <E extends Throwable> Success<V> ifFailure(Class<E> type, ThrowingConsumer<? super E> action) {
 			return this;
 		}
 
-		@Override public <E extends Throwable> Success<V> ifFailure(Class<E> type, Consumer<? super E> action) {
+		@Override public Success<V> handle(ThrowingConsumer<? super Throwable> handler) {
 			return this;
 		}
 
-		@Override public Success<V> handle(Consumer<Throwable> handler) {
-			return this;
-		}
-
-		@Override public <E extends Throwable> Success<V> handle(Class<E> type, Consumer<? super E> handler) {
+		@Override public <E extends Throwable> Success<V> handle(Class<E> type, ThrowingConsumer<? super E> handler) {
 			return this;
 		}
 
@@ -415,7 +437,7 @@ public sealed interface Result<V> {
 			return alternative.get();
 		}
 
-		@Override public Result<V> or(ThrowingSupplier<V> alternative) {
+		@Override public Result<V> or(ThrowingSupplier<? extends V> alternative) {
 			return this.flatOr(() -> of(alternative));
 		}
 
@@ -443,13 +465,13 @@ public sealed interface Result<V> {
 			return this;
 		}
 
-		@Override public Failure<V> and(ThrowingRunnable action) {
+		@Override public Failure<V> multiply(ThrowingRunnable action) {
 			try {
 				action.run();
 				return this;
 			} catch (Throwable cause) {
 				if (this.cause == null) {
-					return new Failure<>(cause, this.suppressed);
+					return new Failure<>(cause, this.suppressed == null ? null : List.copyOf(this.suppressed));
 				}
 
 				this.cause.addSuppressed(cause);
@@ -469,7 +491,7 @@ public sealed interface Result<V> {
 			return this;
 		}
 
-		@Override public Failure<V> suppress(ThrowingRunnable action) {
+		@Override public Failure<V> multiplySuppressed(ThrowingRunnable action) {
 			try {
 				action.run();
 				return this;
@@ -486,54 +508,77 @@ public sealed interface Result<V> {
 			}
 		}
 
-		@Override public <W> Result<W> replace(ThrowingSupplier<? extends W> supplier) {
-			return this.flatReplace(of(supplier));
+		@Override public <W> Result<W> thenResult(ThrowingSupplier<? extends W> supplier) {
+			return this.then(of(supplier));
 		}
 
-		@Override public <R extends Result<?>> R flatReplace(R result) {
-			return (R) result.ifFailure(cause -> {
+		@Override public <R extends Result<?>> R then(R result) {
+			return (R) result.flatMapFailure(cause -> {
+				var failure = (Failure<?>) result;
+
+				if (cause == null) {
+					if (this.cause != null) {
+						var suppressed = failure.suppressed;
+
+						if (suppressed != null) {
+							suppressed.forEach(this.cause::addSuppressed);
+						}
+
+						return cast(this);
+					}
+
+					if (this.suppressed != null && failure.suppressed != null) {
+						var suppressed = new ArrayList<>(failure.suppressed);
+						suppressed.addAll(this.suppressed);
+
+						return new Failure<>(null, suppressed);
+					}
+
+					return cast(failure.suppressed == null ? this : failure);
+				}
+
 				if (this.cause != null) {
 					cause.addSuppressed(this.cause);
 				} else if (this.suppressed != null) {
 					this.suppressed.forEach(cause::addSuppressed);
 				}
+
+				return cast(failure);
 			});
 		}
 
-		@Override public <R extends Result<?>> R supply(Supplier<? extends R> supplier) {
-			return this.flatReplace(supplier.get());
+		@Override public <R extends Result<?>> R thenSupply(Supplier<? extends R> supplier) {
+			return this.then(supplier.get());
 		}
 
-		@Override public Failure<V> ifSuccess(Consumer<? super V> action) {
+		@Override public Failure<V> and(ThrowingConsumer<? super V> action) {
 			return this;
 		}
 
-		@Override public Failure<V> ifFailure(Consumer<Throwable> action) {
-			action.accept(this.cause);
-			return new Failure<>(this.cause, null);
-		}
-
-		@Override public <E extends Throwable> Failure<V> ifFailure(Class<E> type, Consumer<? super E> action) {
-			if (type.isInstance(this.cause)) {
-				action.accept((E) this.cause);
-				return new Failure<>(this.cause, null);
+		@Override public Failure<V> ifFailure(ThrowingConsumer<? super Throwable> action) {
+			try {
+				action.accept(this.cause);
+				return this;
+			} catch (Throwable trouble) {
+				return this.then(new Failure<>(trouble, null));
 			}
-
-			return this;
 		}
 
-		@Override public Failure<V> handle(Consumer<Throwable> handler) {
-			handler.accept(this.cause);
-			return new Failure<>(null, null);
+		@Override public <E extends Throwable> Failure<V> ifFailure(Class<E> type, ThrowingConsumer<? super E> action) {
+			return type.isInstance(this.cause) ? this.ifFailure((ThrowingConsumer<Throwable>) action) : this;
 		}
 
-		@Override public <E extends Throwable> Failure<V> handle(Class<E> type, Consumer<? super E> handler) {
-			if (type.isInstance(this.cause)) {
-				handler.accept((E) this.cause);
+		@Override public Failure<V> handle(ThrowingConsumer<? super Throwable> handler) {
+			try {
+				handler.accept(this.cause);
 				return new Failure<>(null, null);
+			} catch (Throwable trouble) {
+				return this.then(new Failure<>(trouble, null));
 			}
+		}
 
-			return this;
+		@Override public <E extends Throwable> Failure<V> handle(Class<E> type, ThrowingConsumer<? super E> handler) {
+			return type.isInstance(this.cause) ? this.handle((ThrowingConsumer<Throwable>) handler) : this;
 		}
 
 		@Override public int hashCode() {

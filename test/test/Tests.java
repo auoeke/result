@@ -14,7 +14,7 @@ public class Tests {
 
 	@Test void test() {
 		ModernIO.readString(resources.resolve("bar"))
-			.ifSuccess(text -> System.out.println("success: " + text))
+			.and(text -> System.out.println("success: " + text))
 			.ifFailure(trouble -> System.err.print("failure: "))
 			.handle(NoSuchFileException.class, trouble -> System.err.printf("file `%s` not found%n", trouble.getFile()))
 			.handle(Throwable.class, System.err::println);
@@ -26,9 +26,9 @@ public class Tests {
 		assert Util.parseNumber("NaN").isSuccess();
 		assert Util.parseNumber("abc").isFailure();
 
-		Stream.of(0, 300, Integer.MAX_VALUE / 2, Long.MAX_VALUE / 2, Float.MAX_VALUE, Double.MAX_VALUE, "abcd")
+		Stream.of(0, 300, 1 << 30, 1L << 62 , Float.MAX_VALUE, Double.MAX_VALUE, "abcd")
 			.forEach(object -> Util.parseNumber(object.toString())
-				.ifSuccess(value -> System.out.println(object + " is a " + value.getClass().getName()))
+				.and(value -> System.out.println(object + " is a " + value.getClass().getName()))
 				.ifFailure(trouble -> System.err.println(object + " is not a number"))
 			);
 
