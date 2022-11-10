@@ -6,7 +6,7 @@ plugins {
 }
 
 group("net.auoeke")
-version("0.2.0")
+version("0.3.0")
 description("a library to facilitate signaling and handling exceptional conditions")
 javaVersion(17)
 

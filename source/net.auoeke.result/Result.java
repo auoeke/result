@@ -259,7 +259,27 @@ public sealed interface Result<V> {
 	 */
 	<R extends Result<?>> R thenSupply(Supplier<? extends R> supplier);
 
-	<W> Result<W> map(ThrowingFunction<V, W> mapper);
+	/**
+	 If this result is a {@code Success}, then this method returns a {@code Result} of applying {@code mapper} to its value;
+	 otherwise it returns {@code this}.
+
+	 @param mapper a function to apply—if this result is a {@code Success}—to its value
+	 @param <W> the type of the value returned by {@code mapper}
+	 @return if this result is a {@code Success}, a {@code Result} of applying {@code mapper} to its value; else {@code this}
+	 @since 0.0.0
+	 */
+	<W> Result<W> map(ThrowingFunction<? super V, ? extends W> mapper);
+
+	/**
+	 If this result is a {@code Success}, then this method returns the result of applying {@code mapper} to its value;
+	 otherwise it returns {@code this}.
+
+	 @param mapper a {@code Result}-returning function to apply—if this result is a {@code Success}—to its value
+	 @param <W> the type of the value of the result returned by {@code mapper}
+	 @return if this result is a {@code Success}, the result of applying {@code mapper} to its value; else {@code this}
+	 @since 0.3.0
+	 */
+	<W> Result<W> flatMap(Function<? super V, ? extends Result<W>> mapper);
 
 	Result<V> flatMapFailure(Function<? super Throwable, ? extends Result<? extends V>> mapper);
 
@@ -270,7 +290,7 @@ public sealed interface Result<V> {
 	 @param predicate a predicate against which to test this result
 	 @return a {@code Failure(null)} if this result is a {@code Success}
 	 and its value does not match {@code predicate} or else {@code this}
-	 @since 0.2.0
+	 @since 0.0.0
 	 */
 	Result<V> filter(Predicate<V> predicate);
 
@@ -350,8 +370,12 @@ public sealed interface Result<V> {
 			return this.and(v -> action.run());
 		}
 
-		@Override public <W> Result<W> map(ThrowingFunction<V, W> mapper) {
+		@Override public <W> Result<W> map(ThrowingFunction<? super V, ? extends W> mapper) {
 			return of(() -> mapper.apply(this.value));
+		}
+
+		@Override public <W> Result<W> flatMap(Function<? super V, ? extends Result<W>> mapper) {
+			return mapper.apply(this.value);
 		}
 
 		@Override public Success<V> flatMapFailure(Function<? super Throwable, ? extends Result<? extends V>> mapper) {
@@ -501,7 +525,11 @@ public sealed interface Result<V> {
 			}
 		}
 
-		@Override public <W> Failure<W> map(ThrowingFunction<V, W> mapper) {
+		@Override public <W> Failure<W> map(ThrowingFunction<? super V, ? extends W> mapper) {
+			return (Failure<W>) this;
+		}
+
+		@Override public <W> Failure<W> flatMap(Function<? super V, ? extends Result<W>> mapper) {
 			return (Failure<W>) this;
 		}
 
