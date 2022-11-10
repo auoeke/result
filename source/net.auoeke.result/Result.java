@@ -263,7 +263,25 @@ public sealed interface Result<V> {
 
 	Result<V> flatMapFailure(Function<? super Throwable, ? extends Result<? extends V>> mapper);
 
+	/**
+	 Returns a {@code Failure(null)} if this result is a {@code Success}
+	 and its value does not match {@code predicate}; otherwise returns {@code this}.
+
+	 @param predicate a predicate against which to test this result
+	 @return a {@code Failure(null)} if this result is a {@code Success}
+	 and its value does not match {@code predicate} or else {@code this}
+	 @since 0.2.0
+	 */
 	Result<V> filter(Predicate<V> predicate);
+
+	/**
+	 Returns a {@code Failure(null)} if this result is a {@code Success(null)};
+	 otherwise returns {@code this}.
+
+	 @return a {@code Failure(null)} if this result is a {@code Success(null)} or else {@code this}
+	 @since 0.2.0
+	 */
+	Result<V> filterNotNull();
 
 	Result<V> ifFailure(ThrowingConsumer<? super Throwable> action);
 
@@ -342,6 +360,10 @@ public sealed interface Result<V> {
 
 		@Override public Result<V> filter(Predicate<V> predicate) {
 			return predicate.test(this.value) ? this : new Failure<>(null, null);
+		}
+
+		@Override public Result<V> filterNotNull() {
+			return this.filter(Objects::nonNull);
 		}
 
 		@Override public Result<V> multiplySuppressed(ThrowingRunnable action) {
@@ -488,6 +510,10 @@ public sealed interface Result<V> {
 		}
 
 		@Override public Failure<V> filter(Predicate<V> predicate) {
+			return this;
+		}
+
+		@Override public Result<V> filterNotNull() {
 			return this;
 		}
 
