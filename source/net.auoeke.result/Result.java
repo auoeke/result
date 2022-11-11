@@ -292,12 +292,13 @@ public sealed interface Result<V> {
 	Result<V> flatMapFailure(Function<? super Throwable, ? extends Result<? extends V>> mapper);
 
 	/**
-	 Returns a {@code Failure(null)} if this result is a {@code Success}
-	 and its value does not match {@code predicate}; otherwise returns {@code this}.
+	 If this result is a {@code Success}, then this method returns {@code Failure(null)}
+	 if its value does not match {@code predicate} or the {@link Result} of {@code predicate} if it throws;
+	 <br>otherwise it returns {@code this}.
 
 	 @param predicate a predicate against which to test this result
-	 @return a {@code Failure(null)} if this result is a {@code Success}
-	 and its value does not match {@code predicate} or else {@code this}
+	 @return a {@code Failure} if this result is a {@code Success}
+	 and its value does not match {@code predicate} or it throws; otherwise {@code this}
 	 @since 0.0.0
 	 */
 	Result<V> filter(ThrowingPredicate<V> predicate);
