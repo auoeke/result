@@ -6,7 +6,6 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -216,6 +215,15 @@ public sealed interface Result<V> {
 	 */
 	Result<V> flatOr(Supplier<? extends Result<? extends V>> alternative);
 
+	/**
+	 Returns {@code this} if this result is a {@link Failure} or if it is a {@link Success}
+	 and the application of {@code action} to its value is successful.
+	 Otherwise, this method returns a new {@code Failure} containing the exception thrown by {@code action}.
+
+	 @param action a consumer to call—if this result is a {@code Success}—with its value
+	 @return if this result is a {@code Success} and {@code action} throws, a {@code Failure}; otherwise {@code this}
+	 @since 0.0.0
+	 */
 	Result<V> and(ThrowingConsumer<? super V> action);
 
 	Result<V> multiply(ThrowingRunnable action);
@@ -292,7 +300,7 @@ public sealed interface Result<V> {
 	 and its value does not match {@code predicate} or else {@code this}
 	 @since 0.0.0
 	 */
-	Result<V> filter(Predicate<V> predicate);
+	Result<V> filter(ThrowingPredicate<V> predicate);
 
 	/**
 	 Returns a {@code Failure(null)} if this result is a {@code Success(null)};
@@ -382,8 +390,12 @@ public sealed interface Result<V> {
 			return this;
 		}
 
-		@Override public Result<V> filter(Predicate<V> predicate) {
-			return predicate.test(this.value) ? this : new Failure<>(null, null);
+		@Override public Result<V> filter(ThrowingPredicate<V> predicate) {
+			try {
+				return predicate.test(this.value) ? this : new Failure<>(null, null);
+			} catch (Throwable trouble) {
+				return new Failure<>(trouble, null);
+			}
 		}
 
 		@Override public Result<V> filterNotNull() {
@@ -537,7 +549,7 @@ public sealed interface Result<V> {
 			return (Failure<V>) mapper.apply(this.cause);
 		}
 
-		@Override public Failure<V> filter(Predicate<V> predicate) {
+		@Override public Failure<V> filter(ThrowingPredicate<V> predicate) {
 			return this;
 		}
 
